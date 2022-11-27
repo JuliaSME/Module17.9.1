@@ -1,34 +1,43 @@
-L = input("Введите последовательность чисел через пробел: ")
-L_mod = [int(a) for a in L.split()]
+import telebot
+from config import keys, TOKEN
+from extensions import ConvertionException, CryptoConverter
 
-if (' ' not in (L)):
-    raise ValueError("Введены некорректные данные! Введите последовательность чисел через пробел!")
 
-num = int(input("Введите любое число: "))
-if num % 1 != 0:
-    raise ValueError("Введены некорректные данные! Введите число!")
+bot = telebot.TeleBot(TOKEN)
 
-for i in range(1, len(L_mod)):
-    x = L_mod[i]
-    idx = i
-    while idx > 0 and L_mod[idx-1] > x:
-        L_mod[idx] = L_mod[idx-1]
-        idx -= 1
-    L_mod[idx] = x
-print("Сортированный список:", L_mod)
 
-def binary_search(L_mod, num, left, right):
-    if left > right:  # если левая граница превысила правую,
-        return False  # значит элемент отсутствует
-    middle = (right + left) // 2  # находим середину
-    if L_mod[middle] == num:  # если элемент в середине,
-        return middle  # возвращаем этот индекс
-    elif num < L_mod[middle]:  # если элемент меньше элемента в середине
-        # рекурсивно ищем в левой половине
-        return binary_search(L_mod, num, left, middle - 1)
-    else:  # иначе в правой
-        return binary_search(L_mod, num, middle + 1, right)
+@bot.message_handler(commands=['start', 'help'])
+def help(message: telebot.types.Message):
+    text = 'Чтобы начать работу введите команду боту в следующем формате:\n<имя валюты цену которой он хочет узнать> \
+        <имя валюты в которой надо узнать цену первой валюты > \
+        <количество первой валюты>\nУвидеть список всех доступных валют: /values'
+    bot.reply_to(message, text)
 
-# запускаем алгоритм на левой и правой границе
-print(binary_search(L_mod, num, 0, len(L_mod)-1))
-print("Индекс введенного числа в списке: ", binary_search(L_mod, num, 0, len(L_mod) - 1))
+    @bot.message_handler(commands=['values'])
+    def values(message: telebot.types.Message):
+        text = 'Информация о всех доступных валютах:'
+        for key in keys.keys():
+            text = '\n'.join((text, key,))
+        bot.reply_to(message, text)
+
+        @bot.message_handler(content_types=['text', ])
+        def convert(message: telebot.types.Message):
+            try:
+                check = message.text.split(' ')
+
+                if len(check) != 3:
+                    raise ConvertionException('Слишком много параметров.')
+
+                quote, base, amount = check
+                total_base = CryptoConverter.get_price(quote, base, amount)
+            except ConvertionException as e:
+                bot.reply_to(message, f'Ошибка пользователя.\n{e}')
+            except Exception as e:
+                bot.reply_to(message, f'Не удалось обработать команду\n{e}')
+            else:
+                text = f'Цена {amount} {quote} в {base} - {total_base}'
+                bot.send_message(message.chat.id, text)
+
+
+
+bot.polling()
